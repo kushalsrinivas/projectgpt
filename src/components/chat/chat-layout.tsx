@@ -5,6 +5,7 @@ import { Sidebar } from "@/components/chat/sidebar";
 import { ChatArea } from "@/components/chat/chat-area";
 import { ModelSelector } from "@/components/chat/model-selector";
 import { ProjectContextPanel } from "@/components/chat/project-context-panel";
+import { MCPServersPanel } from "@/components/chat/mcp-servers-panel";
 import { Button } from "@/components/ui/button";
 import { Menu, X } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -63,6 +64,7 @@ export function ChatLayout() {
               context={projectContext}
               onContextChange={setProjectContext}
             />
+            <MCPServersPanel />
           </div>
         </header>
 
