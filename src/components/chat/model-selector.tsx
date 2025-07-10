@@ -80,7 +80,11 @@ export function ModelSelector({
   selectedModel,
   onModelChange,
 }: ModelSelectorProps) {
-  const currentModel = models.find((m) => m.id === selectedModel) || models[0];
+  const currentModel = models.find((m) => m.id === selectedModel) ?? models[0];
+
+  if (!currentModel) {
+    throw new Error("No models available");
+  }
   const [credits] = useState(3);
 
   const handleModelSelect = (modelId: string) => {
@@ -159,11 +163,11 @@ export function ModelSelector({
               ))}
             </div>
 
-            						{model.tier === "premium" && credits === 0 && (
-							<p className="text-xs text-yellow-400">
-								Watch an ad to unlock this model
-							</p>
-						)}
+            {model.tier === "premium" && credits === 0 && (
+              <p className="text-xs text-yellow-400">
+                Watch an ad to unlock this model
+              </p>
+            )}
           </DropdownMenuItem>
         ))}
       </DropdownMenuContent>
