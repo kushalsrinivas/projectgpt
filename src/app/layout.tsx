@@ -2,6 +2,7 @@ import "@/styles/globals.css";
 
 import type { Metadata } from "next";
 import { Geist } from "next/font/google";
+import { SessionProvider } from "next-auth/react";
 
 import { TRPCReactProvider } from "@/trpc/react";
 import { ThemeProvider } from "@/components/theme-provider";
@@ -28,9 +29,11 @@ export default function RootLayout({
       suppressHydrationWarning
     >
       <body className="antialiased bg-background text-foreground">
-        <ThemeProvider>
-          <TRPCReactProvider>{children}</TRPCReactProvider>
-        </ThemeProvider>
+        <SessionProvider>
+          <ThemeProvider>
+            <TRPCReactProvider>{children}</TRPCReactProvider>
+          </ThemeProvider>
+        </SessionProvider>
       </body>
     </html>
   );

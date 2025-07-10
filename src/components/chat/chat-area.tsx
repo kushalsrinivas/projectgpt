@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
+import { useSession } from "next-auth/react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -17,6 +18,16 @@ import {
   AlertCircle,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { api } from "@/trpc/react";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
+import { SignInModal } from "./signin-modal";
+import { useGuestMessageCount } from "@/hooks/use-guest-message-count";
 
 interface ChatAreaProps {
   selectedModel: string;
@@ -31,138 +42,77 @@ interface Message {
   isStreaming?: boolean;
 }
 
-const sampleMessages: Message[] = [
-  {
-    id: "1",
-    role: "assistant",
-    content:
-      "Hello! I'm your AI assistant. I can help you with coding, writing, analysis, and more. What would you like to work on today?",
-    timestamp: new Date(Date.now() - 300000),
-    model: "GPT-4",
-  },
-  {
-    id: "2",
-    role: "user",
-    content:
-      "I need help building a React component for a todo list. Can you help me create one with add, edit, and delete functionality?",
-    timestamp: new Date(Date.now() - 240000),
-  },
-  {
-    id: "3",
-    role: "assistant",
-    content: `I'll help you create a comprehensive todo list component! Here's a React component with all the functionality you requested:
-
-\`\`\`jsx
-import React, { useState } from 'react';
-
-const TodoList = () => {
-  const [todos, setTodos] = useState([]);
-  const [inputValue, setInputValue] = useState('');
-  const [editingId, setEditingId] = useState(null);
-  const [editValue, setEditValue] = useState('');
-
-  const addTodo = () => {
-    if (inputValue.trim()) {
-      setTodos([...todos, {
-        id: Date.now(),
-        text: inputValue,
-        completed: false
-      }]);
-      setInputValue('');
-    }
-  };
-
-  const deleteTodo = (id) => {
-    setTodos(todos.filter(todo => todo.id !== id));
-  };
-
-  const startEdit = (todo) => {
-    setEditingId(todo.id);
-    setEditValue(todo.text);
-  };
-
-  const saveEdit = () => {
-    setTodos(todos.map(todo => 
-      todo.id === editingId 
-        ? { ...todo, text: editValue }
-        : todo
-    ));
-    setEditingId(null);
-    setEditValue('');
-  };
-
-  return (
-    <div className="max-w-md mx-auto p-4">
-      <div className="flex gap-2 mb-4">
-        <input
-          type="text"
-          value={inputValue}
-          onChange={(e) => setInputValue(e.target.value)}
-          placeholder="Add a new todo..."
-          className="flex-1 p-2 border rounded"
-          onKeyPress={(e) => e.key === 'Enter' && addTodo()}
-        />
-        <button onClick={addTodo} className="px-4 py-2 bg-blue-500 text-white rounded">
-          Add
-        </button>
-      </div>
-      
-      <ul className="space-y-2">
-        {todos.map(todo => (
-          <li key={todo.id} className="flex items-center gap-2 p-2 border rounded">
-            {editingId === todo.id ? (
-              <>
-                <input
-                  type="text"
-                  value={editValue}
-                  onChange={(e) => setEditValue(e.target.value)}
-                  className="flex-1 p-1 border rounded"
-                />
-                <button onClick={saveEdit} className="px-2 py-1 bg-green-500 text-white rounded text-sm">
-                  Save
-                </button>
-              </>
-            ) : (
-              <>
-                <span className="flex-1">{todo.text}</span>
-                <button onClick={() => startEdit(todo)} className="px-2 py-1 bg-yellow-500 text-white rounded text-sm">
-                  Edit
-                </button>
-                <button onClick={() => deleteTodo(todo.id)} className="px-2 py-1 bg-red-500 text-white rounded text-sm">
-                  Delete
-                </button>
-              </>
-            )}
-          </li>
-        ))}
-      </ul>
-    </div>
-  );
-};
-
-export default TodoList;
-\`\`\`
-
-This component includes:
-- **Add functionality**: Type in the input and click "Add" or press Enter
-- **Edit functionality**: Click "Edit" to modify existing todos
-- **Delete functionality**: Click "Delete" to remove todos
-- **State management**: Uses React hooks to manage todos and editing state
-- **Responsive design**: Clean, simple styling that works well
-
-Would you like me to explain any part of the code or add additional features like todo completion status or local storage persistence?`,
-    timestamp: new Date(Date.now() - 180000),
-    model: "GPT-4",
-  },
-];
-
 export function ChatArea({ selectedModel }: ChatAreaProps) {
-  const [messages, setMessages] = useState<Message[]>(sampleMessages);
+  const { data: session, status } = useSession();
+  const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
-  const [needsCredit, setNeedsCredit] = useState(false);
+  const [conversationId] = useState(() => crypto.randomUUID());
+  const [guestSessionId] = useState(() => crypto.randomUUID());
+  const [showRateLimitDialog, setShowRateLimitDialog] = useState(false);
+  const [showSignInModal, setShowSignInModal] = useState(false);
+  const [rateLimitInfo, setRateLimitInfo] = useState<{
+    tier: "free" | "pro";
+    resetTime: Date;
+  } | null>(null);
+
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // Guest message count hook
+  const {
+    guestMessageCount,
+    incrementGuestMessageCount,
+    resetGuestMessageCount,
+    hasReachedLimit,
+    remainingMessages,
+    isClient,
+  } = useGuestMessageCount();
+
+  // tRPC hooks for authenticated users
+  const sendMessage = api.chat.send.useMutation();
+  const quotaStatus = api.chat.getQuotaStatus.useQuery(undefined, {
+    enabled: !!session,
+  });
+  const watchAd = api.chat.watchAd.useMutation();
+  const { data: conversation } = api.chat.getConversation.useQuery(
+    { conversationId },
+    { enabled: !!session }
+  );
+
+  // tRPC hook for guest users
+  const sendGuestMessage = api.chat.sendGuest.useMutation();
+
+  // Load conversation messages for authenticated users
+  useEffect(() => {
+    if (conversation && session) {
+      const formattedMessages: Message[] = conversation.map((msg) => ({
+        id: msg.id.toString(),
+        role: msg.role as "user" | "assistant",
+        content: msg.content,
+        timestamp: new Date(msg.createdAt),
+        model: msg.model || undefined,
+      }));
+      setMessages(formattedMessages);
+    }
+  }, [conversation, session]);
+
+  // Reset guest message count when user signs in and restore draft message
+  useEffect(() => {
+    if (session && isClient) {
+      resetGuestMessageCount();
+
+      // Restore draft message if it exists
+      const draftMessage = sessionStorage.getItem("draftMessage");
+      if (draftMessage) {
+        setInput(draftMessage);
+        sessionStorage.removeItem("draftMessage");
+        // Focus the textarea after a short delay
+        setTimeout(() => {
+          textareaRef.current?.focus();
+        }, 100);
+      }
+    }
+  }, [session, isClient, resetGuestMessageCount]);
 
   const scrollToBottom = () => {
     if (scrollAreaRef.current) {
@@ -180,41 +130,118 @@ export function ChatArea({ selectedModel }: ChatAreaProps) {
   });
 
   const handleSend = async () => {
-    if (!input.trim() || isLoading) return;
+    if (!input.trim()) return;
 
-    // Check if premium model needs credit
-    if (
-      selectedModel.includes("gpt-4") ||
-      selectedModel.includes("claude-3-sonnet")
-    ) {
-      setNeedsCredit(true);
-      return;
-    }
+    // Check if user is authenticated
+    if (session) {
+      // Handle authenticated user
+      if (sendMessage.isPending) return;
 
-    const userMessage: Message = {
-      id: Date.now().toString(),
-      role: "user",
-      content: input,
-      timestamp: new Date(),
-    };
-
-    setMessages((prev) => [...prev, userMessage]);
-    setInput("");
-    setIsLoading(true);
-
-    // Simulate AI response
-    setTimeout(() => {
-      const assistantMessage: Message = {
-        id: (Date.now() + 1).toString(),
-        role: "assistant",
-        content:
-          "This is a simulated response. In the real implementation, this would connect to OpenRouter API to get responses from the selected AI model.",
+      const userMessage: Message = {
+        id: Date.now().toString(),
+        role: "user",
+        content: input,
         timestamp: new Date(),
-        model: selectedModel,
       };
-      setMessages((prev) => [...prev, assistantMessage]);
-      setIsLoading(false);
-    }, 1500);
+
+      setMessages((prev) => [...prev, userMessage]);
+      setInput("");
+
+      try {
+        const response = await sendMessage.mutateAsync({
+          message: input,
+          model: selectedModel,
+          conversationId,
+        });
+
+        const assistantMessage: Message = {
+          id: (Date.now() + 1).toString(),
+          role: "assistant",
+          content: response.message,
+          timestamp: new Date(),
+          model: response.model,
+        };
+
+        setMessages((prev) => [...prev, assistantMessage]);
+        quotaStatus.refetch();
+      } catch (error) {
+        console.error("Send message error:", error);
+
+        if (
+          error instanceof Error &&
+          (error.message?.includes("quota") || error.message?.includes("rate"))
+        ) {
+          setRateLimitInfo({
+            tier: "free",
+            resetTime: new Date(Date.now() + 24 * 60 * 60 * 1000),
+          });
+          setShowRateLimitDialog(true);
+        } else {
+          const errorMessage: Message = {
+            id: (Date.now() + 2).toString(),
+            role: "assistant",
+            content: `Sorry, I encountered an error: ${
+              error instanceof Error ? error.message : "Please try again."
+            }`,
+            timestamp: new Date(),
+          };
+          setMessages((prev) => [...prev, errorMessage]);
+        }
+      }
+    } else {
+      // Handle guest user
+      if (sendGuestMessage.isPending) return;
+
+      // Check if guest has reached the limit
+      if (hasReachedLimit) {
+        setShowSignInModal(true);
+        return;
+      }
+
+      const userMessage: Message = {
+        id: Date.now().toString(),
+        role: "user",
+        content: input,
+        timestamp: new Date(),
+      };
+
+      setMessages((prev) => [...prev, userMessage]);
+      setInput("");
+
+      try {
+        const response = await sendGuestMessage.mutateAsync({
+          message: input,
+          model: selectedModel,
+          conversationId,
+          guestSessionId,
+        });
+
+        const assistantMessage: Message = {
+          id: (Date.now() + 1).toString(),
+          role: "assistant",
+          content: response.message,
+          timestamp: new Date(),
+          model: response.model,
+        };
+
+        setMessages((prev) => [...prev, assistantMessage]);
+
+        // Increment guest message count
+        incrementGuestMessageCount();
+      } catch (error) {
+        console.error("Send guest message error:", error);
+
+        const errorMessage: Message = {
+          id: (Date.now() + 2).toString(),
+          role: "assistant",
+          content: `Sorry, I encountered an error: ${
+            error instanceof Error ? error.message : "Please try again."
+          }`,
+          timestamp: new Date(),
+        };
+        setMessages((prev) => [...prev, errorMessage]);
+      }
+    }
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -228,49 +255,107 @@ export function ChatArea({ selectedModel }: ChatAreaProps) {
     navigator.clipboard.writeText(content);
   };
 
-  const watchAdToUnlock = () => {
-    // This would show an ad component
-    alert("Ad functionality will be implemented here!");
-    setNeedsCredit(false);
+  const handleWatchAd = async () => {
+    try {
+      await watchAd.mutateAsync();
+      setShowRateLimitDialog(false);
+      quotaStatus.refetch();
+    } catch (error) {
+      console.error("Watch ad error:", error);
+    }
   };
+
+  const handleUpgrade = () => {
+    alert("Upgrade functionality will be implemented here!");
+  };
+
+  const quota = quotaStatus.data;
+  const isLoading = sendMessage.isPending || sendGuestMessage.isPending;
+
+  // Show loading state while session is loading
+  if (status === "loading") {
+    return (
+      <div className="flex flex-col h-full items-center justify-center">
+        <div className="animate-spin">
+          <RefreshCw className="h-8 w-8" />
+        </div>
+        <p className="mt-2 text-sm text-muted-foreground">Loading...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col h-full">
-      {/* Credit requirement banner */}
-      {needsCredit && (
-        <div className="bg-yellow-500/10 border-b border-yellow-500/20 p-3">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <AlertCircle className="h-4 w-4 text-yellow-500" />
-              <span className="text-sm text-yellow-100">
-                This model requires a credit. Watch a short ad to unlock it!
-              </span>
-            </div>
-            <div className="flex items-center gap-2">
+      {/* Sign-in modal for guests */}
+      <SignInModal
+        open={showSignInModal}
+        onOpenChange={setShowSignInModal}
+        draftMessage={input}
+      />
+
+      {/* Rate limit dialog for authenticated users */}
+      {session && (
+        <Dialog
+          open={showRateLimitDialog}
+          onOpenChange={setShowRateLimitDialog}
+        >
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <AlertCircle className="h-5 w-5 text-orange-500" />
+                Daily Quota Reached
+              </DialogTitle>
+              <DialogDescription>
+                You've used up your free chat quota for today. Your quota will
+                reset at {rateLimitInfo?.resetTime.toLocaleString()}.
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="flex flex-col gap-3 mt-4">
               <Button
-                size="sm"
-                onClick={watchAdToUnlock}
-                className="bg-yellow-600 hover:bg-yellow-700 text-black"
+                onClick={handleWatchAd}
+                disabled={watchAd.isPending}
+                className="gap-2"
               >
-                <Play className="h-3 w-3 mr-1" />
-                Watch Ad (30s)
+                <Play className="h-4 w-4" />
+                {watchAd.isPending
+                  ? "Loading..."
+                  : "Watch 30s Ad for 10 More Chats"}
               </Button>
+
               <Button
-                size="sm"
                 variant="outline"
-                onClick={() => setNeedsCredit(false)}
-                className="border-yellow-500/30 text-yellow-100 hover:bg-yellow-500/10"
+                onClick={handleUpgrade}
+                className="gap-2"
               >
-                Cancel
+                <Zap className="h-4 w-4" />
+                Upgrade to Pro for Unlimited Access
               </Button>
             </div>
-          </div>
-        </div>
+          </DialogContent>
+        </Dialog>
       )}
 
-      {/* Messages area */}
       <ScrollArea ref={scrollAreaRef} className="flex-1 p-4">
         <div className="space-y-4 max-w-4xl mx-auto">
+          {messages.length === 0 && (
+            <div className="flex flex-col items-center justify-center h-64 text-center">
+              <div className="p-4 rounded-lg bg-muted/50 max-w-md">
+                <h3 className="font-semibold mb-2">Welcome to ProjectGPT!</h3>
+                <p className="text-sm text-muted-foreground">
+                  I'm your AI assistant. I can help you with coding, writing,
+                  analysis, and more. What would you like to work on today?
+                </p>
+                {!session && isClient && (
+                  <p className="text-xs text-muted-foreground mt-2">
+                    You have {remainingMessages} free messages remaining. Sign
+                    in for unlimited access.
+                  </p>
+                )}
+              </div>
+            </div>
+          )}
+
           {messages.map((message) => (
             <div
               key={message.id}
@@ -335,7 +420,9 @@ export function ChatArea({ selectedModel }: ChatAreaProps) {
 
               {message.role === "user" && (
                 <Avatar className="h-8 w-8 mt-1">
-                  <AvatarFallback>You</AvatarFallback>
+                  <AvatarFallback>
+                    {session ? session.user?.name?.charAt(0) || "U" : "G"}
+                  </AvatarFallback>
                 </Avatar>
               )}
             </div>
@@ -391,7 +478,14 @@ export function ChatArea({ selectedModel }: ChatAreaProps) {
               <span>Press Enter to send • Shift+Enter for new line</span>
               <div className="flex items-center gap-1">
                 <Zap className="h-3 w-3 text-yellow-500" />
-                <span>3 credits remaining</span>
+                <span>
+                  {session
+                    ? quota?.tier === "free"
+                      ? `${quota.remaining.requests} requests remaining`
+                      : "Unlimited"
+                    : isClient &&
+                      `${remainingMessages} free messages remaining`}
+                </span>
               </div>
             </div>
           </div>

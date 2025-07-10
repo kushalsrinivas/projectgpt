@@ -46,10 +46,67 @@ export const users = createTable("user", (d) => ({
 		})
 		.default(sql`CURRENT_TIMESTAMP`),
 	image: d.varchar({ length: 255 }),
+	tier: d.varchar({ length: 20 }).default("free").notNull(), // 'free' or 'pro'
+	createdAt: d
+		.timestamp({ withTimezone: true })
+		.default(sql`CURRENT_TIMESTAMP`)
+		.notNull(),
 }));
 
-export const usersRelations = relations(users, ({ many }) => ({
+export const userQuotas = createTable("user_quota", (d) => ({
+	id: d.integer().primaryKey().generatedByDefaultAsIdentity(),
+	userId: d
+		.varchar({ length: 255 })
+		.notNull()
+		.references(() => users.id),
+	requestsUsed: d.integer().default(0).notNull(),
+	tokensUsed: d.integer().default(0).notNull(),
+	lastReset: d
+		.timestamp({ withTimezone: true })
+		.default(sql`CURRENT_TIMESTAMP`)
+		.notNull(),
+	createdAt: d
+		.timestamp({ withTimezone: true })
+		.default(sql`CURRENT_TIMESTAMP`)
+		.notNull(),
+	updatedAt: d.timestamp({ withTimezone: true }).$onUpdate(() => new Date()),
+}), (t) => [
+	index("user_quota_user_id_idx").on(t.userId),
+]);
+
+export const chatMessages = createTable("chat_message", (d) => ({
+	id: d.integer().primaryKey().generatedByDefaultAsIdentity(),
+	userId: d
+		.varchar({ length: 255 })
+		.references(() => users.id), // Made nullable for guest messages
+	conversationId: d.varchar({ length: 255 }).notNull(),
+	guestSessionId: d.varchar({ length: 255 }), // For guest message tracking
+	role: d.varchar({ length: 20 }).notNull(), // 'user' or 'assistant'
+	content: d.text().notNull(),
+	model: d.varchar({ length: 100 }),
+	tokensUsed: d.integer().default(0).notNull(),
+	createdAt: d
+		.timestamp({ withTimezone: true })
+		.default(sql`CURRENT_TIMESTAMP`)
+		.notNull(),
+}), (t) => [
+	index("chat_message_user_id_idx").on(t.userId),
+	index("chat_message_conversation_id_idx").on(t.conversationId),
+	index("chat_message_guest_session_id_idx").on(t.guestSessionId),
+]);
+
+export const usersRelations = relations(users, ({ many, one }) => ({
 	accounts: many(accounts),
+	quota: one(userQuotas, { fields: [users.id], references: [userQuotas.userId] }),
+	chatMessages: many(chatMessages),
+}));
+
+export const userQuotasRelations = relations(userQuotas, ({ one }) => ({
+	user: one(users, { fields: [userQuotas.userId], references: [users.id] }),
+}));
+
+export const chatMessagesRelations = relations(chatMessages, ({ one }) => ({
+	user: one(users, { fields: [chatMessages.userId], references: [users.id] }),
 }));
 
 export const accounts = createTable(
