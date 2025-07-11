@@ -1,0 +1,1 @@
+ALTER TABLE "projectgpt_chat_message" ADD COLUMN "updatedAt" timestamp with time zone;

@@ -86,7 +86,7 @@ export function ChatArea({ selectedModel }: ChatAreaProps) {
   useEffect(() => {
     if (conversation && session) {
       const formattedMessages: Message[] = conversation.map((msg) => ({
-        id: msg.id.toString(),
+        id: String(msg.id),
         role: msg.role as "user" | "assistant",
         content: msg.content,
         timestamp: new Date(msg.createdAt),
@@ -366,8 +366,9 @@ export function ChatArea({ selectedModel }: ChatAreaProps) {
             >
               {message.role === "assistant" && (
                 <Avatar className="h-8 w-8 mt-1">
-                  <AvatarImage src="/ai-avatar.png" />
-                  <AvatarFallback>AI</AvatarFallback>
+                  <AvatarFallback className="bg-primary text-primary-foreground">
+                    AI
+                  </AvatarFallback>
                 </Avatar>
               )}
 
@@ -431,7 +432,9 @@ export function ChatArea({ selectedModel }: ChatAreaProps) {
           {isLoading && (
             <div className="flex gap-3">
               <Avatar className="h-8 w-8 mt-1">
-                <AvatarFallback>AI</AvatarFallback>
+                <AvatarFallback className="bg-primary text-primary-foreground">
+                  AI
+                </AvatarFallback>
               </Avatar>
               <div className="bg-muted rounded-lg p-4">
                 <div className="flex items-center gap-2">

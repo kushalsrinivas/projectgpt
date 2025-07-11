@@ -15,6 +15,13 @@
       "when": 1752179848240,
       "tag": "0001_light_hardball",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1752218505867,
+      "tag": "0002_gigantic_nitro",
+      "breakpoints": true
     }
   ]
 }

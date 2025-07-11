@@ -89,6 +89,7 @@ export const chatMessages = createTable("chat_message", (d) => ({
 		.timestamp({ withTimezone: true })
 		.default(sql`CURRENT_TIMESTAMP`)
 		.notNull(),
+	updatedAt: d.timestamp({ withTimezone: true }).$onUpdate(() => new Date()),
 }), (t) => [
 	index("chat_message_user_id_idx").on(t.userId),
 	index("chat_message_conversation_id_idx").on(t.conversationId),
