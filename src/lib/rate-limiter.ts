@@ -1,5 +1,5 @@
 import { db } from "@/server/db";
-import { userQuotas, users } from "@/server/db/schema";
+import { userQuotas, users, chatMessages } from "@/server/db/schema";
 import { eq, and, gte } from "drizzle-orm";
 import { TIER_CONFIGS, type UserTier } from "./openrouter";
 
@@ -131,8 +131,8 @@ export class RateLimiter {
     
     const recentRequests = await db.query.chatMessages.findMany({
       where: and(
-        eq(userQuotas.userId, userId),
-        gte(userQuotas.updatedAt, oneMinuteAgo)
+        eq(chatMessages.userId, userId),
+        gte(chatMessages.createdAt, oneMinuteAgo)
       ),
     });
 

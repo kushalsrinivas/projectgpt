@@ -1,0 +1,1 @@
+ALTER TABLE "projectgpt_chat_message" DROP COLUMN "updatedAt";
