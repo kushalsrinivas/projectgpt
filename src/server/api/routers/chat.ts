@@ -5,7 +5,7 @@ import {
   protectedProcedure,
   publicProcedure,
 } from "@/server/api/trpc";
-import { chatMessages, users } from "@/server/db/schema";
+import { chatMessages, users, conversationFolders } from "@/server/db/schema";
 import { OpenRouterClient, TIER_CONFIGS } from "@/lib/openrouter";
 import { rateLimiter } from "@/lib/rate-limiter";
 import { buildContext, buildSystemPrompt, getModelLimits } from "@/lib/context-manager";
@@ -300,7 +300,10 @@ export const chatRouter = createTRPCRouter({
     }),
 
   getConversations: protectedProcedure
-    .query(async ({ ctx }) => {
+    .input(z.object({
+      folderId: z.number().optional(),
+    }).optional())
+    .query(async ({ ctx, input }) => {
       const userId = ctx.session.user.id;
       
       // Get unique conversations with their latest message
@@ -309,11 +312,34 @@ export const chatRouter = createTRPCRouter({
         orderBy: [desc(chatMessages.createdAt)],
       });
 
+      // Get folder assignments for all conversations
+      const folderAssignments = await ctx.db.query.conversationFolders.findMany({
+        where: eq(conversationFolders.userId, userId),
+      });
+
+      // Create a map of conversation ID to folder ID
+      const conversationFolderMap = new Map();
+      for (const assignment of folderAssignments) {
+        conversationFolderMap.set(assignment.conversationId, assignment.folderId);
+      }
+
       // Group by conversation ID and get the latest message for each
       const conversationMap = new Map();
       
       for (const message of conversations) {
         if (!conversationMap.has(message.conversationId)) {
+          const folderId = conversationFolderMap.get(message.conversationId);
+          
+          // Filter by folder if specified
+          if (input?.folderId && folderId !== input.folderId) {
+            continue;
+          }
+          
+          // If filtering by "no folder" (null), skip conversations that are in folders
+          if (input?.folderId === null && folderId !== undefined) {
+            continue;
+          }
+
           conversationMap.set(message.conversationId, {
             id: message.conversationId,
             title: message.role === "user" 
@@ -322,6 +348,7 @@ export const chatRouter = createTRPCRouter({
             lastMessage: message.content,
             lastMessageTime: message.createdAt,
             model: message.model,
+            folderId: folderId || null,
           });
         }
       }

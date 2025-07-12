@@ -1,6 +1,6 @@
 import { db } from "@/server/db";
 import { userQuotas, users, chatMessages } from "@/server/db/schema";
-import { eq, and, gte } from "drizzle-orm";
+import { eq, and, gte, sql } from "drizzle-orm";
 import { TIER_CONFIGS, type UserTier } from "./openrouter";
 
 export interface RateLimitResult {
@@ -184,8 +184,8 @@ export class RateLimiter {
   private async consumeQuota(userId: string, requests: number, tokens: number) {
     await db.update(userQuotas)
       .set({
-        requestsUsed: userQuotas.requestsUsed + requests,
-        tokensUsed: userQuotas.tokensUsed + tokens,
+        requestsUsed: sql`${userQuotas.requestsUsed} + ${requests}`,
+        tokensUsed: sql`${userQuotas.tokensUsed} + ${tokens}`,
         updatedAt: new Date(),
       })
       .where(eq(userQuotas.userId, userId));
@@ -261,7 +261,7 @@ export class RateLimiter {
     // Reduce used requests to effectively add credits
     await db.update(userQuotas)
       .set({
-        requestsUsed: Math.max(0, quota.requestsUsed - requests),
+        requestsUsed: sql`GREATEST(0, ${userQuotas.requestsUsed} - ${requests})`,
         updatedAt: new Date(),
       })
       .where(eq(userQuotas.userId, userId));

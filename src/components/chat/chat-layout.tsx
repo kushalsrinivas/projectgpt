@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Sidebar } from "@/components/chat/sidebar";
+import { EnhancedSidebar } from "@/components/chat/enhanced-sidebar";
 import { ChatArea } from "@/components/chat/chat-area";
 import { ModelSelector } from "@/components/chat/model-selector";
 import { ProjectContextPanel } from "@/components/chat/project-context-panel";
@@ -36,7 +36,7 @@ export function ChatLayout() {
           sidebarOpen ? "translate-x-0" : "-translate-x-full"
         )}
       >
-        <Sidebar onClose={() => setSidebarOpen(false)} />
+        <EnhancedSidebar onClose={() => setSidebarOpen(false)} />
       </div>
 
       {/* Main content area */}

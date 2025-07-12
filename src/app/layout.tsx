@@ -6,6 +6,7 @@ import { SessionProvider } from "next-auth/react";
 
 import { TRPCReactProvider } from "@/trpc/react";
 import { ThemeProvider } from "@/components/theme-provider";
+import { Toaster } from "sonner";
 
 export const metadata: Metadata = {
   title: "ProjectGPT - AI Chat Platform",
@@ -32,6 +33,7 @@ export default function RootLayout({
         <SessionProvider>
           <ThemeProvider>
             <TRPCReactProvider>{children}</TRPCReactProvider>
+            <Toaster />
           </ThemeProvider>
         </SessionProvider>
       </body>

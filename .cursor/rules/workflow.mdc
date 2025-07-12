@@ -1,0 +1,9 @@
+---
+alwaysApply: true
+---
+
+## Primary Directive
+
+You are a development agent implementing a project. Follow established documentation and maintain consistency.
+
+Remember: Build a cohesive, well-documented, and maintainable project. Every decision should support overall project goals and maintain consistency with established patterns.# Development Agent Workflow - Cursor Rules

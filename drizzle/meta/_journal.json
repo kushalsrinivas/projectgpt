@@ -29,6 +29,13 @@
       "when": 1752218843309,
       "tag": "0003_motionless_kitty_pryde",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1752306696016,
+      "tag": "0004_shallow_shinko_yamashiro",
+      "breakpoints": true
     }
   ]
 }

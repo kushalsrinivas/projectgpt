@@ -95,10 +95,53 @@ export const chatMessages = createTable("chat_message", (d) => ({
 	index("chat_message_guest_session_id_idx").on(t.guestSessionId),
 ]);
 
+export const folders = createTable("folder", (d) => ({
+	id: d.integer().primaryKey().generatedByDefaultAsIdentity(),
+	userId: d
+		.varchar({ length: 255 })
+		.notNull()
+		.references(() => users.id),
+	name: d.varchar({ length: 30 }).notNull(), // max 30 characters as per requirement
+	color: d.varchar({ length: 7 }).default("#6366f1").notNull(), // hex color code
+	createdAt: d
+		.timestamp({ withTimezone: true })
+		.default(sql`CURRENT_TIMESTAMP`)
+		.notNull(),
+	updatedAt: d.timestamp({ withTimezone: true }).$onUpdate(() => new Date()),
+}), (t) => [
+	index("folder_user_id_idx").on(t.userId),
+	index("folder_name_idx").on(t.name),
+]);
+
+export const conversationFolders = createTable("conversation_folder", (d) => ({
+	id: d.integer().primaryKey().generatedByDefaultAsIdentity(),
+	conversationId: d.varchar({ length: 255 }).notNull(),
+	folderId: d
+		.integer()
+		.notNull()
+		.references(() => folders.id, { onDelete: "cascade" }),
+	userId: d
+		.varchar({ length: 255 })
+		.notNull()
+		.references(() => users.id),
+	createdAt: d
+		.timestamp({ withTimezone: true })
+		.default(sql`CURRENT_TIMESTAMP`)
+		.notNull(),
+}), (t) => [
+	index("conversation_folder_conversation_id_idx").on(t.conversationId),
+	index("conversation_folder_folder_id_idx").on(t.folderId),
+	index("conversation_folder_user_id_idx").on(t.userId),
+	// Unique constraint to prevent duplicate assignments
+	index("conversation_folder_unique_idx").on(t.conversationId, t.folderId),
+]);
+
 export const usersRelations = relations(users, ({ many, one }) => ({
 	accounts: many(accounts),
 	quota: one(userQuotas, { fields: [users.id], references: [userQuotas.userId] }),
 	chatMessages: many(chatMessages),
+	folders: many(folders),
+	conversationFolders: many(conversationFolders),
 }));
 
 export const userQuotasRelations = relations(userQuotas, ({ one }) => ({
@@ -107,6 +150,16 @@ export const userQuotasRelations = relations(userQuotas, ({ one }) => ({
 
 export const chatMessagesRelations = relations(chatMessages, ({ one }) => ({
 	user: one(users, { fields: [chatMessages.userId], references: [users.id] }),
+}));
+
+export const foldersRelations = relations(folders, ({ one, many }) => ({
+	user: one(users, { fields: [folders.userId], references: [users.id] }),
+	conversationFolders: many(conversationFolders),
+}));
+
+export const conversationFoldersRelations = relations(conversationFolders, ({ one }) => ({
+	user: one(users, { fields: [conversationFolders.userId], references: [users.id] }),
+	folder: one(folders, { fields: [conversationFolders.folderId], references: [folders.id] }),
 }));
 
 export const accounts = createTable(
