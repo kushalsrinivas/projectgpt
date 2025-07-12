@@ -31,6 +31,7 @@ import { useGuestMessageCount } from "@/hooks/use-guest-message-count";
 
 interface ChatAreaProps {
   selectedModel: string;
+  selectedConversationId: string | null;
 }
 
 interface Message {
@@ -42,11 +43,16 @@ interface Message {
   isStreaming?: boolean;
 }
 
-export function ChatArea({ selectedModel }: ChatAreaProps) {
+export function ChatArea({
+  selectedModel,
+  selectedConversationId,
+}: ChatAreaProps) {
   const { data: session, status } = useSession();
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
-  const [conversationId] = useState(() => crypto.randomUUID());
+  const [conversationId, setConversationId] = useState(() =>
+    crypto.randomUUID()
+  );
   const [guestSessionId] = useState(() => crypto.randomUUID());
   const [showRateLimitDialog, setShowRateLimitDialog] = useState(false);
   const [showSignInModal, setShowSignInModal] = useState(false);
@@ -81,6 +87,14 @@ export function ChatArea({ selectedModel }: ChatAreaProps) {
 
   // tRPC hook for guest users
   const sendGuestMessage = api.chat.sendGuest.useMutation();
+
+  // Handle conversation selection changes
+  useEffect(() => {
+    if (selectedConversationId) {
+      setConversationId(selectedConversationId);
+      setMessages([]); // Clear current messages while loading
+    }
+  }, [selectedConversationId]);
 
   // Load conversation messages for authenticated users
   useEffect(() => {

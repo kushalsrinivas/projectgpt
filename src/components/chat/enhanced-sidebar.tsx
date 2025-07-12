@@ -35,6 +35,8 @@ import { toast } from "sonner";
 
 interface EnhancedSidebarProps {
   onClose: () => void;
+  onConversationSelect: (conversationId: string) => void;
+  selectedConversationId: string | null;
 }
 
 interface ConversationItem {
@@ -55,7 +57,11 @@ interface FolderItem {
   updatedAt: Date | null;
 }
 
-export function EnhancedSidebar({ onClose }: EnhancedSidebarProps) {
+export function EnhancedSidebar({
+  onClose,
+  onConversationSelect,
+  selectedConversationId,
+}: EnhancedSidebarProps) {
   const { data: session } = useSession();
   const [folderManagerOpen, setFolderManagerOpen] = useState(false);
   const [expandedFolders, setExpandedFolders] = useState<Set<number>>(
@@ -86,7 +92,7 @@ export function EnhancedSidebar({ onClose }: EnhancedSidebarProps) {
     api.folder.removeConversation.useMutation();
   const moveConversations = api.folder.moveConversations.useMutation();
 
-  const credits = quotaStatus?.remaining || 0;
+  const credits = quotaStatus?.remaining?.requests || 0;
 
   // Toggle folder expansion
   const toggleFolder = (folderId: number) => {
@@ -104,6 +110,13 @@ export function EnhancedSidebar({ onClose }: EnhancedSidebarProps) {
     conversationId: string,
     event: React.MouseEvent
   ) => {
+    // If this is a simple click (no modifier keys), select the conversation for viewing
+    if (!event.ctrlKey && !event.metaKey && !event.shiftKey) {
+      onConversationSelect(conversationId);
+      return;
+    }
+
+    // Handle multi-selection for drag-and-drop operations
     event.preventDefault();
     event.stopPropagation();
 
@@ -289,7 +302,7 @@ export function EnhancedSidebar({ onClose }: EnhancedSidebarProps) {
               variant="secondary"
               className="bg-yellow-600/20 text-yellow-300 border-yellow-500/30"
             >
-              <div>{credits?.requests ?? 0} left</div>
+              {credits} left
             </Badge>
           </div>
 
@@ -397,6 +410,9 @@ export function EnhancedSidebar({ onClose }: EnhancedSidebarProps) {
                           onSelect={toggleConversationSelection}
                           onDragStart={handleDragStart}
                           folderColor={folder.color}
+                          isCurrentConversation={
+                            selectedConversationId === conversation.id
+                          }
                         />
                       )
                     )}
@@ -454,6 +470,9 @@ export function EnhancedSidebar({ onClose }: EnhancedSidebarProps) {
                             ?.color
                         : undefined
                     }
+                    isCurrentConversation={
+                      selectedConversationId === conversation.id
+                    }
                   />
                 ))
               )}
@@ -496,6 +515,7 @@ interface ConversationItemProps {
   onSelect: (conversationId: string, event: React.MouseEvent) => void;
   onDragStart: (conversationId: string) => void;
   folderColor?: string;
+  isCurrentConversation?: boolean;
 }
 
 function ConversationItem({
@@ -504,6 +524,7 @@ function ConversationItem({
   onSelect,
   onDragStart,
   folderColor,
+  isCurrentConversation,
 }: ConversationItemProps) {
   const [showDropdown, setShowDropdown] = useState(false);
   const { data: folders = [] } = api.folder.getAll.useQuery();
@@ -538,7 +559,9 @@ function ConversationItem({
     <div
       className={cn(
         "group cursor-pointer rounded-lg p-3 transition-colors relative",
-        isSelected
+        isCurrentConversation
+          ? "bg-primary/10 border border-primary/20"
+          : isSelected
           ? "bg-primary/20 border border-primary/30"
           : "hover:bg-sidebar-accent",
         folderColor && "border-l-4"

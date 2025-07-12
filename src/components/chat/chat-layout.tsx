@@ -14,6 +14,9 @@ export function ChatLayout() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [selectedModel, setSelectedModel] = useState("gpt-4");
   const [projectContext, setProjectContext] = useState<string[]>([]);
+  const [selectedConversationId, setSelectedConversationId] = useState<
+    string | null
+  >(null);
 
   return (
     <div className="flex h-screen bg-background">
@@ -36,7 +39,11 @@ export function ChatLayout() {
           sidebarOpen ? "translate-x-0" : "-translate-x-full"
         )}
       >
-        <EnhancedSidebar onClose={() => setSidebarOpen(false)} />
+        <EnhancedSidebar 
+          onClose={() => setSidebarOpen(false)} 
+          onConversationSelect={setSelectedConversationId}
+          selectedConversationId={selectedConversationId}
+        />
       </div>
 
       {/* Main content area */}
@@ -69,7 +76,10 @@ export function ChatLayout() {
         </header>
 
         {/* Chat area */}
-        <ChatArea selectedModel={selectedModel} />
+        <ChatArea 
+          selectedModel={selectedModel} 
+          selectedConversationId={selectedConversationId}
+        />
       </div>
     </div>
   );
