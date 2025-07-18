@@ -32,6 +32,8 @@ import { cn } from "@/lib/utils";
 import { api } from "@/trpc/react";
 import { FolderManager } from "./folder-manager";
 import { toast } from "sonner";
+import { localFirstTRPC } from "@/lib/local-first-trpc";
+import { SyncStatusComponent } from "@/components/sync-status";
 
 interface EnhancedSidebarProps {
   onClose: () => void;
@@ -482,6 +484,13 @@ export function EnhancedSidebar({
 
         <Separator />
 
+        {/* Sync Status */}
+        <div className="p-4">
+          <SyncStatusComponent compact />
+        </div>
+
+        <Separator />
+
         {/* Settings */}
         <div className="p-4">
           <Button variant="ghost" className="w-full justify-start" size="sm">
@@ -556,9 +565,10 @@ function ConversationItem({
   };
 
   return (
-    <div
+    <button
+      type="button"
       className={cn(
-        "group cursor-pointer rounded-lg p-3 transition-colors relative",
+        "group cursor-pointer rounded-lg p-3 transition-colors relative w-full text-left",
         isCurrentConversation
           ? "bg-primary/10 border border-primary/20"
           : isSelected
@@ -570,14 +580,6 @@ function ConversationItem({
       draggable
       onDragStart={() => onDragStart(conversation.id)}
       onClick={(e) => onSelect(conversation.id, e)}
-      onKeyDown={(e) => {
-        if (e.key === "Enter" || e.key === " ") {
-          e.preventDefault();
-          onSelect(conversation.id, e as any);
-        }
-      }}
-      role="button"
-      tabIndex={0}
     >
       <div className="flex items-start justify-between">
         <div className="flex-1 min-w-0">
@@ -652,6 +654,6 @@ function ConversationItem({
       <p className="text-xs text-sidebar-foreground/60 mt-2 truncate">
         {conversation.lastMessage}
       </p>
-    </div>
+    </button>
   );
 }
