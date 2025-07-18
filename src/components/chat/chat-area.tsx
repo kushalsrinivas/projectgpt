@@ -40,7 +40,6 @@ interface Message {
   content: string;
   timestamp: Date;
   model?: string;
-  isStreaming?: boolean;
 }
 
 export function ChatArea({
@@ -60,6 +59,7 @@ export function ChatArea({
     tier: "free" | "pro";
     resetTime: Date;
   } | null>(null);
+  const [isStreaming, setIsStreaming] = useState(false);
 
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -74,8 +74,7 @@ export function ChatArea({
     isClient,
   } = useGuestMessageCount();
 
-  // tRPC hooks for authenticated users
-  const sendMessage = api.chat.send.useMutation();
+  // tRPC hooks for authenticated users (keeping for quota status and other features)
   const quotaStatus = api.chat.getQuotaStatus.useQuery(undefined, {
     enabled: !!session,
   });
@@ -84,9 +83,6 @@ export function ChatArea({
     { conversationId },
     { enabled: !!session }
   );
-
-  // tRPC hook for guest users
-  const sendGuestMessage = api.chat.sendGuest.useMutation();
 
   // Handle conversation selection changes
   useEffect(() => {
@@ -144,117 +140,95 @@ export function ChatArea({
   });
 
   const handleSend = async () => {
-    if (!input.trim()) return;
+    if (!input.trim() || isStreaming) return;
 
-    // Check if user is authenticated
-    if (session) {
-      // Handle authenticated user
-      if (sendMessage.isPending) return;
+    const userMessage: Message = {
+      id: Date.now().toString(),
+      role: "user",
+      content: input,
+      timestamp: new Date(),
+    };
 
-      const userMessage: Message = {
-        id: Date.now().toString(),
-        role: "user",
-        content: input,
-        timestamp: new Date(),
-      };
+    setMessages((prev) => [...prev, userMessage]);
+    setInput("");
+    setIsStreaming(true);
 
-      setMessages((prev) => [...prev, userMessage]);
-      setInput("");
+    // Check if guest has reached the limit
+    if (!session && hasReachedLimit) {
+      setShowSignInModal(true);
+      setIsStreaming(false);
+      return;
+    }
 
-      try {
-        const response = await sendMessage.mutateAsync({
-          message: input,
+    try {
+      const response = await fetch("/api/chat", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          messages: [{ role: "user", content: input }],
           model: selectedModel,
           conversationId,
-        });
+          guestSessionId: !session ? guestSessionId : undefined,
+        }),
+      });
 
-        const assistantMessage: Message = {
-          id: (Date.now() + 1).toString(),
-          role: "assistant",
-          content: response.message,
-          timestamp: new Date(),
-          model: response.model,
-        };
-
-        setMessages((prev) => [...prev, assistantMessage]);
-        quotaStatus.refetch();
-      } catch (error) {
-        console.error("Send message error:", error);
-
-        if (
-          error instanceof Error &&
-          (error.message?.includes("quota") || error.message?.includes("rate"))
-        ) {
-          setRateLimitInfo({
-            tier: "free",
-            resetTime: new Date(Date.now() + 24 * 60 * 60 * 1000),
-          });
-          setShowRateLimitDialog(true);
-        } else {
-          const errorMessage: Message = {
-            id: (Date.now() + 2).toString(),
-            role: "assistant",
-            content: `Sorry, I encountered an error: ${
-              error instanceof Error ? error.message : "Please try again."
-            }`,
-            timestamp: new Date(),
-          };
-          setMessages((prev) => [...prev, errorMessage]);
-        }
-      }
-    } else {
-      // Handle guest user
-      if (sendGuestMessage.isPending) return;
-
-      // Check if guest has reached the limit
-      if (hasReachedLimit) {
-        setShowSignInModal(true);
-        return;
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(errorText || "Failed to send message");
       }
 
-      const userMessage: Message = {
-        id: Date.now().toString(),
-        role: "user",
-        content: input,
+      const result = await response.json();
+
+      // Create assistant message with complete response
+      const assistantMessage: Message = {
+        id: (Date.now() + 1).toString(),
+        role: "assistant",
+        content: result.message,
         timestamp: new Date(),
+        model: result.model,
       };
 
-      setMessages((prev) => [...prev, userMessage]);
-      setInput("");
+      setMessages((prev) => [...prev, assistantMessage]);
 
-      try {
-        const response = await sendGuestMessage.mutateAsync({
-          message: input,
-          model: selectedModel,
-          conversationId,
-          guestSessionId,
-        });
-
-        const assistantMessage: Message = {
-          id: (Date.now() + 1).toString(),
-          role: "assistant",
-          content: response.message,
-          timestamp: new Date(),
-          model: response.model,
-        };
-
-        setMessages((prev) => [...prev, assistantMessage]);
-
-        // Increment guest message count
+      // Increment guest message count for guests
+      if (!session) {
         incrementGuestMessageCount();
-      } catch (error) {
-        console.error("Send guest message error:", error);
-
-        const errorMessage: Message = {
-          id: (Date.now() + 2).toString(),
-          role: "assistant",
-          content: `Sorry, I encountered an error: ${
-            error instanceof Error ? error.message : "Please try again."
-          }`,
-          timestamp: new Date(),
-        };
-        setMessages((prev) => [...prev, errorMessage]);
+      } else {
+        // Refetch quota status for authenticated users
+        quotaStatus.refetch();
       }
+    } catch (error) {
+      console.error("Send message error:", error);
+
+      // Handle rate limit errors
+      if (
+        error instanceof Error &&
+        (error.message?.includes("quota") ||
+          error.message?.includes("rate") ||
+          error.message?.includes("429"))
+      ) {
+        setRateLimitInfo({
+          tier: "free",
+          resetTime: new Date(Date.now() + 24 * 60 * 60 * 1000),
+        });
+        setShowRateLimitDialog(true);
+      }
+
+      // Add error message
+      const errorMessage: Message = {
+        id: (Date.now() + 2).toString(),
+        role: "assistant",
+        content: `Sorry, I encountered an error: ${
+          error instanceof Error ? error.message : "Please try again."
+        }`,
+        timestamp: new Date(),
+      };
+
+      setMessages((prev) => [...prev, errorMessage]);
+    } finally {
+      setIsStreaming(false);
     }
   };
 
@@ -284,7 +258,7 @@ export function ChatArea({
   };
 
   const quota = quotaStatus.data;
-  const isLoading = sendMessage.isPending || sendGuestMessage.isPending;
+  const isLoading = isStreaming;
 
   // Show loading state while session is loading
   if (status === "loading") {
@@ -485,7 +459,11 @@ export function ChatArea({
               disabled={!input.trim() || isLoading}
               size="lg"
             >
-              <Send className="h-4 w-4" />
+              {isStreaming ? (
+                <RefreshCw className="h-4 w-4 animate-spin" />
+              ) : (
+                <Send className="h-4 w-4" />
+              )}
             </Button>
           </div>
 

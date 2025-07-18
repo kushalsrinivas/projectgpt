@@ -1,10 +1,12 @@
 import { env } from "@/env";
+import { createOpenRouter } from '@openrouter/ai-sdk-provider';
 
 export interface OpenRouterMessage {
   role: "system" | "user" | "assistant";
   content: string;
 }
 
+// Legacy interfaces for backward compatibility
 export interface OpenRouterRequest {
   model: string;
   messages: OpenRouterMessage[];
@@ -45,6 +47,16 @@ export interface OpenRouterError {
   };
 }
 
+// Create OpenRouter provider instance with Vercel AI SDK
+export const openrouter = createOpenRouter({
+  apiKey: env.OPENROUTER_API_KEY,
+  headers: {
+    "HTTP-Referer": "https://projectgpt.dev",
+    "X-Title": "ProjectGPT",
+  },
+});
+
+// Legacy client for backward compatibility - will be deprecated
 export class OpenRouterClient {
   private baseUrl = "https://openrouter.ai/api/v1";
   private apiKey: string;
@@ -75,7 +87,7 @@ export class OpenRouterClient {
       headers: {
         "Authorization": `Bearer ${this.apiKey}`,
         "Content-Type": "application/json",
-        "HTTP-Referer": "https://projectgpt.dev", // Replace with your actual domain
+        "HTTP-Referer": "https://projectgpt.dev",
         "X-Title": "ProjectGPT",
         ...options.headers,
       },

@@ -53,18 +53,39 @@ export class LocalFirstTRPC {
     conversationId: string;
     temperature?: number;
     maxTokens?: number;
+    guestSessionId?: string;
   }): Promise<LocalFirstChatMessage> {
     if (this.fallbackToCloud) {
-      // Fall back to direct tRPC call
-      const result = await api.chat.send.mutate(input);
+      // Fall back to non-streaming API call
+      const response = await fetch('/api/chat', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          messages: [{ role: 'user', content: input.message }],
+          model: input.model,
+          conversationId: input.conversationId,
+          temperature: input.temperature,
+          maxTokens: input.maxTokens,
+          guestSessionId: input.guestSessionId,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const result = await response.json();
+
       return {
         id: Date.now().toString(),
-        userId: 'current-user', // This should come from session
+        userId: 'current-user',
         conversationId: input.conversationId,
         role: 'assistant',
         content: result.message,
         model: result.model,
-        tokensUsed: result.tokensUsed,
+        tokensUsed: result.tokensUsed || 0,
         createdAt: new Date(),
         isLocal: false
       };
@@ -72,7 +93,7 @@ export class LocalFirstTRPC {
 
     // Add user message to local storage immediately
     const userMessage = await localStorageService.addChatMessage({
-      userId: 'current-user', // This should come from session
+      userId: 'current-user',
       conversationId: input.conversationId,
       role: 'user',
       content: input.message,
@@ -93,7 +114,26 @@ export class LocalFirstTRPC {
     // Queue cloud sync in background
     this.queueCloudSync(async () => {
       try {
-        const result = await api.chat.send.mutate(input);
+        const response = await fetch('/api/chat', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            messages: [{ role: 'user', content: input.message }],
+            model: input.model,
+            conversationId: input.conversationId,
+            temperature: input.temperature,
+            maxTokens: input.maxTokens,
+            guestSessionId: input.guestSessionId,
+          }),
+        });
+
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
+        const result = await response.json();
         
         // Add AI response to local storage
         const aiMessage = await localStorageService.addChatMessage({
@@ -102,7 +142,7 @@ export class LocalFirstTRPC {
           role: 'assistant',
           content: result.message,
           model: result.model,
-          tokensUsed: result.tokensUsed
+          tokensUsed: result.tokensUsed || 0
         });
 
         // Update conversation with AI response
