@@ -127,12 +127,25 @@ export const chatRouter = createTRPCRouter({
             continue;
           }
 
+          // Extract title from content if it has the [TITLE: ...] format
+          let title = "New Conversation";
+          let displayContent = message.content;
+          
+          if (message.role === "user") {
+            const titleMatch = message.content.match(/^\[TITLE: (.*?)\]\n(.*)/s);
+            if (titleMatch) {
+              title = titleMatch[1];
+              displayContent = titleMatch[2];
+            } else {
+              title = message.content.slice(0, 50) + (message.content.length > 50 ? "..." : "");
+              displayContent = message.content;
+            }
+          }
+
           conversationMap.set(message.conversationId, {
             id: message.conversationId,
-            title: message.role === "user" 
-              ? message.content.slice(0, 50) + (message.content.length > 50 ? "..." : "")
-              : "New Conversation",
-            lastMessage: message.content,
+            title,
+            lastMessage: displayContent,
             lastMessageTime: message.createdAt,
             model: message.model,
             folderId: folderId || null,
@@ -142,5 +155,94 @@ export const chatRouter = createTRPCRouter({
 
       return Array.from(conversationMap.values())
         .sort((a, b) => new Date(b.lastMessageTime).getTime() - new Date(a.lastMessageTime).getTime());
+    }),
+
+  // Rename a conversation
+  renameConversation: protectedProcedure
+    .input(z.object({
+      conversationId: z.string().min(1),
+      title: z.string().min(1).max(100),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const userId = ctx.session.user.id;
+
+      // Verify conversation ownership
+      const conversation = await ctx.db.query.chatMessages.findFirst({
+        where: and(
+          eq(chatMessages.conversationId, input.conversationId),
+          eq(chatMessages.userId, userId)
+        ),
+      });
+
+      if (!conversation) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Conversation not found.",
+        });
+      }
+
+      // Update the first user message in the conversation to reflect the new title
+      // This is a workaround since we don't have a separate conversations table
+      const firstUserMessage = await ctx.db.query.chatMessages.findFirst({
+        where: and(
+          eq(chatMessages.conversationId, input.conversationId),
+          eq(chatMessages.userId, userId),
+          eq(chatMessages.role, "user")
+        ),
+        orderBy: [chatMessages.createdAt],
+      });
+
+      if (firstUserMessage) {
+        // Add a special marker to indicate this is a renamed conversation
+        const updatedContent = `[TITLE: ${input.title}]\n${firstUserMessage.content.replace(/^\[TITLE: .*?\]\n/, '')}`;
+        
+        await ctx.db
+          .update(chatMessages)
+          .set({ content: updatedContent })
+          .where(and(
+            eq(chatMessages.id, firstUserMessage.id),
+            eq(chatMessages.userId, userId)
+          ));
+      }
+
+      return { success: true, title: input.title };
+    }),
+
+  // Delete a conversation
+  deleteConversation: protectedProcedure
+    .input(z.object({
+      conversationId: z.string().min(1),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const userId = ctx.session.user.id;
+
+      // Verify conversation ownership
+      const conversation = await ctx.db.query.chatMessages.findFirst({
+        where: and(
+          eq(chatMessages.conversationId, input.conversationId),
+          eq(chatMessages.userId, userId)
+        ),
+      });
+
+      if (!conversation) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Conversation not found.",
+        });
+      }
+
+      // Delete all messages in the conversation
+      await ctx.db.delete(chatMessages).where(and(
+        eq(chatMessages.conversationId, input.conversationId),
+        eq(chatMessages.userId, userId)
+      ));
+
+      // Remove from any folders
+      await ctx.db.delete(conversationFolders).where(and(
+        eq(conversationFolders.conversationId, input.conversationId),
+        eq(conversationFolders.userId, userId)
+      ));
+
+      return { success: true };
     }),
 }); 

@@ -13,6 +13,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   MessageSquare,
   Plus,
@@ -27,6 +28,12 @@ import {
   ChevronRight,
   ChevronDown,
   Filter,
+  Edit3,
+  Trash2,
+  Move,
+  Archive,
+  List,
+  Layers,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { api } from "@/trpc/react";
@@ -59,6 +66,8 @@ interface FolderItem {
   updatedAt: Date | null;
 }
 
+type ViewTab = "all" | "organized";
+
 export function EnhancedSidebar({
   onClose,
   onConversationSelect,
@@ -69,7 +78,7 @@ export function EnhancedSidebar({
   const [expandedFolders, setExpandedFolders] = useState<Set<number>>(
     new Set()
   );
-  const [viewMode, setViewMode] = useState<"all" | number>("all");
+  const [viewTab, setViewTab] = useState<ViewTab>("all");
   const [draggedConversation, setDraggedConversation] = useState<string | null>(
     null
   );
@@ -79,10 +88,7 @@ export function EnhancedSidebar({
 
   // tRPC hooks
   const { data: conversations = [], refetch: refetchConversations } =
-    api.chat.getConversations.useQuery(
-      viewMode === "all" ? undefined : { folderId: viewMode },
-      { enabled: !!session }
-    );
+    api.chat.getConversations.useQuery(undefined, { enabled: !!session });
   const { data: folders = [], refetch: refetchFolders } =
     api.folder.getAll.useQuery(undefined, { enabled: !!session });
   const { data: quotaStatus } = api.chat.getQuotaStatus.useQuery(undefined, {
@@ -219,22 +225,18 @@ export function EnhancedSidebar({
     }
   };
 
-  // Filter conversations by folder
-  const filteredConversations = conversations.filter((conv) => {
-    if (viewMode === "all") return true;
-    return conv.folderId === viewMode;
-  });
-
-  // Group conversations by folder for display
+  // Group conversations by folder for organized view
   const conversationsByFolder = new Map<number | null, ConversationItem[]>();
+  const uncategorizedConversations: ConversationItem[] = [];
+
   for (const conv of conversations) {
-    const key = conv.folderId;
-    if (!conversationsByFolder.has(key)) {
-      conversationsByFolder.set(key, []);
-    }
-    const folderConversations = conversationsByFolder.get(key);
-    if (folderConversations) {
-      folderConversations.push(conv);
+    if (conv.folderId === null) {
+      uncategorizedConversations.push(conv);
+    } else {
+      if (!conversationsByFolder.has(conv.folderId)) {
+        conversationsByFolder.set(conv.folderId, []);
+      }
+      conversationsByFolder.get(conv.folderId)?.push(conv);
     }
   }
 
@@ -316,170 +318,242 @@ export function EnhancedSidebar({
 
         <Separator />
 
-        {/* Folder Management */}
-        <div className="p-4">
-          <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center gap-2">
-              <Folder className="h-4 w-4 text-sidebar-foreground" />
-              <span className="text-sm font-medium text-sidebar-foreground">
-                Folders
-              </span>
-            </div>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setFolderManagerOpen(true)}
-            >
-              <Settings className="h-4 w-4" />
-            </Button>
-          </div>
-
-          {/* View Mode Toggle */}
-          <div className="flex items-center gap-2 mb-3">
-            <Button
-              variant={viewMode === "all" ? "default" : "ghost"}
-              size="sm"
-              onClick={() => setViewMode("all")}
-              className="flex-1 justify-start"
-              onDragOver={handleDragOver}
-              onDrop={handleDropOnAllChats}
-            >
-              <Filter className="h-4 w-4 mr-2" />
-              All Chats
-              <Badge variant="secondary" className="ml-auto">
-                {conversations.length}
-              </Badge>
-            </Button>
-          </div>
-
-          {/* Folders List */}
-          <div className="space-y-1">
-            {folders.map((folder) => (
-              <div key={folder.id} className="space-y-1">
-                <button
-                  type="button"
-                  className={cn(
-                    "flex items-center gap-2 p-2 rounded-lg cursor-pointer transition-colors w-full text-left",
-                    viewMode === folder.id
-                      ? "bg-sidebar-accent"
-                      : "hover:bg-sidebar-accent/50"
-                  )}
-                  onClick={() => setViewMode(folder.id)}
-                  onDragOver={handleDragOver}
-                  onDrop={() => handleDropOnFolder(folder.id)}
-                >
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="h-4 w-4 p-0"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      toggleFolder(folder.id);
-                    }}
-                  >
-                    {expandedFolders.has(folder.id) ? (
-                      <ChevronDown className="h-3 w-3" />
-                    ) : (
-                      <ChevronRight className="h-3 w-3" />
-                    )}
-                  </Button>
-
-                  <div
-                    className="w-3 h-3 rounded-full border border-white/20"
-                    style={{ backgroundColor: folder.color }}
-                  />
-
-                  <span className="text-sm font-medium text-sidebar-foreground flex-1 truncate">
-                    {folder.name}
-                  </span>
-
-                  <Badge variant="secondary" className="text-xs">
-                    {folder.conversationCount}
-                  </Badge>
-                </button>
-
-                {/* Folder conversations (when expanded) */}
-                {expandedFolders.has(folder.id) && (
-                  <div className="ml-6 space-y-1">
-                    {(conversationsByFolder.get(folder.id) || []).map(
-                      (conversation) => (
-                        <ConversationItem
-                          key={conversation.id}
-                          conversation={conversation}
-                          isSelected={selectedConversations.has(
-                            conversation.id
-                          )}
-                          onSelect={toggleConversationSelection}
-                          onDragStart={handleDragStart}
-                          folderColor={folder.color}
-                          isCurrentConversation={
-                            selectedConversationId === conversation.id
-                          }
-                        />
-                      )
-                    )}
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-        </div>
-
-        <Separator />
-
-        {/* Conversations */}
+        {/* Tab System for Chat Organization */}
         <div className="flex-1 overflow-hidden">
-          <div className="p-4">
-            <div className="flex items-center gap-2 mb-3">
-              <History className="h-4 w-4 text-sidebar-foreground" />
-              <span className="text-sm font-medium text-sidebar-foreground">
-                {viewMode === "all"
-                  ? "All Conversations"
-                  : "Folder Conversations"}
-              </span>
-              {viewMode !== "all" && (
+          <Tabs
+            value={viewTab}
+            onValueChange={(value) => setViewTab(value as ViewTab)}
+            className="h-full flex flex-col"
+          >
+            <div className="p-4 pb-2">
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <Folder className="h-4 w-4 text-sidebar-foreground" />
+                  <span className="text-sm font-medium text-sidebar-foreground">
+                    Chat Organization
+                  </span>
+                </div>
                 <Button
                   variant="ghost"
                   size="sm"
-                  onClick={() => setViewMode("all")}
-                  className="ml-auto"
+                  onClick={() => setFolderManagerOpen(true)}
                 >
-                  <X className="h-4 w-4" />
+                  <Settings className="h-4 w-4" />
                 </Button>
-              )}
-            </div>
-          </div>
+              </div>
 
-          <ScrollArea className="flex-1 px-4">
-            <div className="space-y-2">
-              {filteredConversations.length === 0 ? (
-                <div className="text-center py-8 text-muted-foreground">
-                  <MessageSquare className="h-12 w-12 mx-auto mb-2 opacity-50" />
-                  <p>No conversations yet</p>
-                  <p className="text-sm">Start a new chat to get started</p>
-                </div>
-              ) : (
-                filteredConversations.map((conversation) => (
-                  <ConversationItem
-                    key={conversation.id}
-                    conversation={conversation}
-                    isSelected={selectedConversations.has(conversation.id)}
-                    onSelect={toggleConversationSelection}
-                    onDragStart={handleDragStart}
-                    folderColor={
-                      conversation.folderId
-                        ? folders.find((f) => f.id === conversation.folderId)
-                            ?.color
-                        : undefined
-                    }
-                    isCurrentConversation={
-                      selectedConversationId === conversation.id
-                    }
-                  />
-                ))
-              )}
+              <TabsList className="grid w-full grid-cols-2">
+                <TabsTrigger value="all" className="text-xs">
+                  <List className="h-3 w-3 mr-1" />
+                  All Conversations
+                </TabsTrigger>
+                <TabsTrigger value="organized" className="text-xs">
+                  <Layers className="h-3 w-3 mr-1" />
+                  Organized View
+                </TabsTrigger>
+              </TabsList>
             </div>
-          </ScrollArea>
+
+            <TabsContent value="all" className="flex-1 overflow-hidden m-0 p-0">
+              <div className="px-4 pb-2">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-sm font-medium text-sidebar-foreground">
+                    All Conversations
+                  </span>
+                  <Badge variant="secondary" className="text-xs">
+                    {conversations.length}
+                  </Badge>
+                </div>
+              </div>
+
+              <ScrollArea className="flex-1 px-4">
+                <div className="space-y-1">
+                  {conversations.length === 0 ? (
+                    <div className="text-center py-8 text-muted-foreground">
+                      <MessageSquare className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                      <p className="text-sm">No conversations yet</p>
+                      <p className="text-xs">Start a new chat to get started</p>
+                    </div>
+                  ) : (
+                    conversations.map((conversation) => (
+                      <CompactConversationItem
+                        key={conversation.id}
+                        conversation={conversation}
+                        isSelected={selectedConversations.has(conversation.id)}
+                        onSelect={toggleConversationSelection}
+                        onDragStart={handleDragStart}
+                        folderColor={
+                          conversation.folderId
+                            ? folders.find(
+                                (f) => f.id === conversation.folderId
+                              )?.color
+                            : undefined
+                        }
+                        isCurrentConversation={
+                          selectedConversationId === conversation.id
+                        }
+                        folders={folders}
+                        onRefetch={() => {
+                          refetchConversations();
+                          refetchFolders();
+                        }}
+                      />
+                    ))
+                  )}
+                </div>
+              </ScrollArea>
+            </TabsContent>
+
+            <TabsContent
+              value="organized"
+              className="flex-1 overflow-hidden m-0 p-0"
+            >
+              <div className="px-4 pb-2">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-sm font-medium text-sidebar-foreground">
+                    Organized by Folders
+                  </span>
+                  <Badge variant="secondary" className="text-xs">
+                    {folders.length} folders
+                  </Badge>
+                </div>
+              </div>
+
+              <ScrollArea className="flex-1 px-4">
+                <div className="space-y-2">
+                  {/* Folders with conversations */}
+                  {folders.map((folder) => {
+                    const folderConversations =
+                      conversationsByFolder.get(folder.id) || [];
+                    return (
+                      <div key={folder.id} className="space-y-1">
+                        <button
+                          type="button"
+                          className="flex items-center gap-2 p-2 rounded-lg cursor-pointer transition-colors w-full text-left hover:bg-sidebar-accent/50"
+                          onClick={() => toggleFolder(folder.id)}
+                          onDragOver={handleDragOver}
+                          onDrop={() => handleDropOnFolder(folder.id)}
+                        >
+                          <ChevronRight
+                            className={cn(
+                              "h-3 w-3 transition-transform",
+                              expandedFolders.has(folder.id) && "rotate-90"
+                            )}
+                          />
+
+                          <div
+                            className="w-3 h-3 rounded-full border border-white/20"
+                            style={{ backgroundColor: folder.color }}
+                          />
+
+                          <span className="text-sm font-medium text-sidebar-foreground flex-1 truncate">
+                            {folder.name}
+                          </span>
+
+                          <Badge variant="secondary" className="text-xs">
+                            {folderConversations.length}
+                          </Badge>
+                        </button>
+
+                        {/* Folder conversations (when expanded) */}
+                        {expandedFolders.has(folder.id) && (
+                          <div className="ml-6 space-y-1">
+                            {folderConversations.map((conversation) => (
+                              <CompactConversationItem
+                                key={conversation.id}
+                                conversation={conversation}
+                                isSelected={selectedConversations.has(
+                                  conversation.id
+                                )}
+                                onSelect={toggleConversationSelection}
+                                onDragStart={handleDragStart}
+                                folderColor={folder.color}
+                                isCurrentConversation={
+                                  selectedConversationId === conversation.id
+                                }
+                                folders={folders}
+                                onRefetch={() => {
+                                  refetchConversations();
+                                  refetchFolders();
+                                }}
+                                compact
+                              />
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+
+                  {/* Uncategorized conversations */}
+                  {uncategorizedConversations.length > 0 && (
+                    <div className="space-y-1">
+                      <button
+                        type="button"
+                        className="flex items-center gap-2 p-2 rounded-lg cursor-pointer transition-colors w-full text-left hover:bg-sidebar-accent/50"
+                        onClick={() => toggleFolder(-1)} // Use -1 for uncategorized
+                        onDragOver={handleDragOver}
+                        onDrop={handleDropOnAllChats}
+                      >
+                        <ChevronRight
+                          className={cn(
+                            "h-3 w-3 transition-transform",
+                            expandedFolders.has(-1) && "rotate-90"
+                          )}
+                        />
+
+                        <Filter className="h-3 w-3 text-muted-foreground" />
+
+                        <span className="text-sm font-medium text-sidebar-foreground flex-1 truncate">
+                          Uncategorized
+                        </span>
+
+                        <Badge variant="secondary" className="text-xs">
+                          {uncategorizedConversations.length}
+                        </Badge>
+                      </button>
+
+                      {expandedFolders.has(-1) && (
+                        <div className="ml-6 space-y-1">
+                          {uncategorizedConversations.map((conversation) => (
+                            <CompactConversationItem
+                              key={conversation.id}
+                              conversation={conversation}
+                              isSelected={selectedConversations.has(
+                                conversation.id
+                              )}
+                              onSelect={toggleConversationSelection}
+                              onDragStart={handleDragStart}
+                              isCurrentConversation={
+                                selectedConversationId === conversation.id
+                              }
+                              folders={folders}
+                              onRefetch={() => {
+                                refetchConversations();
+                                refetchFolders();
+                              }}
+                              compact
+                            />
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {folders.length === 0 &&
+                    uncategorizedConversations.length === 0 && (
+                      <div className="text-center py-8 text-muted-foreground">
+                        <Folder className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                        <p className="text-sm">No organized conversations</p>
+                        <p className="text-xs">
+                          Create folders to organize your chats
+                        </p>
+                      </div>
+                    )}
+                </div>
+              </ScrollArea>
+            </TabsContent>
+          </Tabs>
         </div>
 
         <Separator />
@@ -517,29 +591,39 @@ export function EnhancedSidebar({
   );
 }
 
-// Conversation Item Component
-interface ConversationItemProps {
+// Compact Conversation Item Component with improved design
+interface CompactConversationItemProps {
   conversation: ConversationItem;
   isSelected: boolean;
   onSelect: (conversationId: string, event: React.MouseEvent) => void;
   onDragStart: (conversationId: string) => void;
   folderColor?: string;
   isCurrentConversation?: boolean;
+  folders: FolderItem[];
+  onRefetch: () => void;
+  compact?: boolean;
 }
 
-function ConversationItem({
+function CompactConversationItem({
   conversation,
   isSelected,
   onSelect,
   onDragStart,
   folderColor,
   isCurrentConversation,
-}: ConversationItemProps) {
+  folders,
+  onRefetch,
+  compact = false,
+}: CompactConversationItemProps) {
   const [showDropdown, setShowDropdown] = useState(false);
-  const { data: folders = [] } = api.folder.getAll.useQuery();
+  const [isRenaming, setIsRenaming] = useState(false);
+  const [newTitle, setNewTitle] = useState(conversation.title);
+
   const addConversationToFolder = api.folder.addConversation.useMutation();
   const removeConversationFromFolder =
     api.folder.removeConversation.useMutation();
+  const renameConversation = api.chat.renameConversation.useMutation();
+  const deleteConversation = api.chat.deleteConversation.useMutation();
 
   const handleMoveToFolder = async (folderId: number) => {
     try {
@@ -548,6 +632,7 @@ function ConversationItem({
         folderId,
       });
       toast.success("Conversation moved to folder");
+      onRefetch();
     } catch (error) {
       toast.error("Failed to move conversation");
     }
@@ -559,101 +644,193 @@ function ConversationItem({
         conversationId: conversation.id,
       });
       toast.success("Conversation removed from folder");
+      onRefetch();
     } catch (error) {
       toast.error("Failed to remove conversation from folder");
     }
   };
 
+  const handleRename = () => {
+    setIsRenaming(true);
+    setShowDropdown(false);
+  };
+
+  const handleSaveRename = async () => {
+    if (!newTitle.trim() || newTitle.trim() === conversation.title) {
+      setIsRenaming(false);
+      setNewTitle(conversation.title);
+      return;
+    }
+
+    try {
+      await renameConversation.mutateAsync({
+        conversationId: conversation.id,
+        title: newTitle.trim(),
+      });
+      toast.success("Conversation renamed successfully");
+      onRefetch();
+      setIsRenaming(false);
+    } catch (error) {
+      toast.error("Failed to rename conversation");
+      setNewTitle(conversation.title);
+      setIsRenaming(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (
+      window.confirm(
+        "Are you sure you want to delete this conversation? This action cannot be undone."
+      )
+    ) {
+      try {
+        await deleteConversation.mutateAsync({
+          conversationId: conversation.id,
+        });
+        toast.success("Conversation deleted successfully");
+        onRefetch();
+        setShowDropdown(false);
+      } catch (error) {
+        toast.error("Failed to delete conversation");
+      }
+    }
+    setShowDropdown(false);
+  };
+
   return (
-    <button
-      type="button"
+    <div
       className={cn(
-        "group cursor-pointer rounded-lg p-3 transition-colors relative w-full text-left",
+        "group relative rounded-lg transition-all duration-200",
         isCurrentConversation
           ? "bg-primary/10 border border-primary/20"
           : isSelected
           ? "bg-primary/20 border border-primary/30"
-          : "hover:bg-sidebar-accent",
-        folderColor && "border-l-4"
+          : "hover:bg-sidebar-accent/50",
+        folderColor && !compact && "border-l-2",
+        compact ? "py-1" : "py-2"
       )}
-      style={folderColor ? { borderLeftColor: folderColor } : undefined}
-      draggable
-      onDragStart={() => onDragStart(conversation.id)}
-      onClick={(e) => onSelect(conversation.id, e)}
+      style={
+        folderColor && !compact ? { borderLeftColor: folderColor } : undefined
+      }
     >
-      <div className="flex items-start justify-between">
-        <div className="flex-1 min-w-0">
-          <p className="text-sm font-medium text-sidebar-foreground truncate">
-            {conversation.title}
-          </p>
-          <div className="flex items-center gap-2 mt-1">
-            {conversation.model && (
-              <Badge variant="outline" className="text-xs">
-                {conversation.model}
-              </Badge>
-            )}
-            <span className="text-xs text-sidebar-foreground/60">
-              {conversation.lastMessageTime.toLocaleDateString()}
-            </span>
-          </div>
-        </div>
-
-        <DropdownMenu open={showDropdown} onOpenChange={setShowDropdown}>
-          <DropdownMenuTrigger asChild>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="opacity-0 group-hover:opacity-100 transition-opacity"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <MoreHorizontal className="h-4 w-4" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuItem
-              onClick={(e) => {
-                e.stopPropagation();
-                // Handle rename or other actions
-              }}
-            >
-              Rename
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            {folders.map((folder) => (
-              <DropdownMenuItem
-                key={folder.id}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handleMoveToFolder(folder.id);
+      <button
+        type="button"
+        className="w-full text-left p-2 cursor-pointer"
+        draggable
+        onDragStart={() => onDragStart(conversation.id)}
+        onClick={(e) => onSelect(conversation.id, e)}
+      >
+        <div className="flex items-center justify-between">
+          <div className="flex-1 min-w-0">
+            {isRenaming ? (
+              <input
+                type="text"
+                value={newTitle}
+                onChange={(e) => setNewTitle(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    handleSaveRename();
+                  }
+                  if (e.key === "Escape") {
+                    setNewTitle(conversation.title);
+                    setIsRenaming(false);
+                  }
                 }}
+                onBlur={handleSaveRename}
+                className="w-full bg-transparent border-none outline-none text-sm font-medium text-sidebar-foreground"
+              />
+            ) : (
+              <p
+                className={cn(
+                  "font-medium text-sidebar-foreground truncate",
+                  compact ? "text-xs" : "text-sm"
+                )}
               >
-                <div
-                  className="w-3 h-3 rounded-full mr-2"
-                  style={{ backgroundColor: folder.color }}
-                />
-                Move to {folder.name}
-              </DropdownMenuItem>
-            ))}
-            {conversation.folderId && (
-              <>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleRemoveFromFolder();
-                  }}
-                >
-                  Remove from folder
-                </DropdownMenuItem>
-              </>
+                {conversation.title}
+              </p>
             )}
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </div>
 
-      <p className="text-xs text-sidebar-foreground/60 mt-2 truncate">
-        {conversation.lastMessage}
-      </p>
-    </button>
+            <div className="flex items-center gap-2 mt-1">
+              {conversation.model && (
+                <Badge
+                  variant="outline"
+                  className={cn(compact ? "text-[10px] px-1 py-0" : "text-xs")}
+                >
+                  {conversation.model}
+                </Badge>
+              )}
+              {folderColor && compact && (
+                <div
+                  className="w-2 h-2 rounded-full"
+                  style={{ backgroundColor: folderColor }}
+                />
+              )}
+              <span
+                className={cn(
+                  "text-sidebar-foreground/60",
+                  compact ? "text-[10px]" : "text-xs"
+                )}
+              >
+                {conversation.lastMessageTime.toLocaleDateString()}
+              </span>
+            </div>
+          </div>
+
+          <DropdownMenu open={showDropdown} onOpenChange={setShowDropdown}>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="ghost"
+                size="sm"
+                className={cn(
+                  "opacity-0 group-hover:opacity-100 transition-opacity",
+                  compact ? "h-6 w-6 p-0" : ""
+                )}
+                onClick={(e) => e.stopPropagation()}
+              >
+                <MoreHorizontal
+                  className={cn(compact ? "h-3 w-3" : "h-4 w-4")}
+                />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={handleRename}>
+                <Edit3 className="h-4 w-4 mr-2" />
+                Rename
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              {folders.map((folder) => (
+                <DropdownMenuItem
+                  key={folder.id}
+                  onClick={() => handleMoveToFolder(folder.id)}
+                >
+                  <div
+                    className="w-3 h-3 rounded-full mr-2"
+                    style={{ backgroundColor: folder.color }}
+                  />
+                  Move to {folder.name}
+                </DropdownMenuItem>
+              ))}
+              {conversation.folderId && (
+                <>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={handleRemoveFromFolder}>
+                    <Move className="h-4 w-4 mr-2" />
+                    Remove from folder
+                  </DropdownMenuItem>
+                </>
+              )}
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                onClick={handleDelete}
+                className="text-destructive"
+              >
+                <Trash2 className="h-4 w-4 mr-2" />
+                Delete
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+      </button>
+    </div>
   );
 }

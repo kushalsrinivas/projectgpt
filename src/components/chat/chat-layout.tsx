@@ -35,12 +35,12 @@ export function ChatLayout() {
       {/* Sidebar */}
       <div
         className={cn(
-          "fixed inset-y-0 left-0 z-50 w-64 transform bg-sidebar border-r transition-transform duration-200 ease-in-out lg:relative lg:translate-x-0",
+          "fixed inset-y-0 left-0 z-50 w-[20vw] transform bg-sidebar border-r transition-transform duration-200 ease-in-out lg:relative lg:translate-x-0",
           sidebarOpen ? "translate-x-0" : "-translate-x-full"
         )}
       >
-        <EnhancedSidebar 
-          onClose={() => setSidebarOpen(false)} 
+        <EnhancedSidebar
+          onClose={() => setSidebarOpen(false)}
           onConversationSelect={setSelectedConversationId}
           selectedConversationId={selectedConversationId}
         />
@@ -76,8 +76,8 @@ export function ChatLayout() {
         </header>
 
         {/* Chat area */}
-        <ChatArea 
-          selectedModel={selectedModel} 
+        <ChatArea
+          selectedModel={selectedModel}
           selectedConversationId={selectedConversationId}
         />
       </div>

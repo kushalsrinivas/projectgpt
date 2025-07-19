@@ -67,6 +67,14 @@ const DEFAULT_COLORS = [
   "#3b82f6", // blue
   "#ef4444", // red
   "#6b7280", // gray
+  "#14b8a6", // teal
+  "#f97316", // orange
+  "#84cc16", // lime
+  "#8b5a2b", // brown
+  "#e11d48", // rose
+  "#7c3aed", // purple
+  "#059669", // green
+  "#dc2626", // red-600
 ];
 
 export function FolderManager({ open, onOpenChange }: FolderManagerProps) {
