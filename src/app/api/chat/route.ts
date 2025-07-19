@@ -3,10 +3,11 @@ import { generateText } from 'ai';
 import type { NextRequest } from 'next/server';
 import { auth } from '@/server/auth';
 import { db } from '@/server/db';
-import { chatMessages, users } from '@/server/db/schema';
+import { chatMessages, users, conversationFolders } from '@/server/db/schema';
 import { eq, desc, and } from 'drizzle-orm';
 import { rateLimiter } from '@/lib/rate-limiter';
-import { buildContext, buildSystemPrompt, getModelLimits } from '@/lib/context-manager';
+import { buildContext, buildSystemPrompt, getModelLimits, type MessageContext } from '@/lib/context-manager';
+import { folderContextManager } from '@/lib/folder-context-manager';
 import { TIER_CONFIGS } from '@/lib/openrouter';
 
 interface ChatMessage {
@@ -111,6 +112,14 @@ export async function POST(req: NextRequest) {
       limit: 10,
     });
 
+    // Check if this conversation belongs to a folder
+    const folderAssignment = await db.query.conversationFolders.findFirst({
+      where: and(
+        eq(conversationFolders.conversationId, conversationId),
+        eq(conversationFolders.userId, userId)
+      ),
+    });
+
     // Build message context for OpenRouter using context manager
     const conversationMessages = [
       // Add recent messages in chronological order
@@ -125,12 +134,27 @@ export async function POST(req: NextRequest) {
       })),
     ];
 
-    const systemPrompt = buildSystemPrompt(
-      "You are ProjectGPT's assistant. Always reference the user's uploaded docs and project context. Be concise, helpful, and clarify when you're uncertain."
-    );
-
+    const baseSystemPrompt = "You are ProjectGPT's assistant. Always reference the user's uploaded docs and project context. Be concise, helpful, and clarify when you're uncertain.";
     const modelLimits = getModelLimits(model);
-    const context = buildContext(conversationMessages, systemPrompt, modelLimits);
+    
+    let context: MessageContext;
+    
+    if (folderAssignment) {
+      // Use folder-enhanced context with RAG integration
+      const userQuery = messages[messages.length - 1]?.content || '';
+      context = await folderContextManager.buildFolderContext(
+        folderAssignment.folderId,
+        userId,
+        conversationMessages,
+        userQuery,
+        baseSystemPrompt,
+        modelLimits
+      );
+    } else {
+      // Use standard context for non-folder conversations
+      const systemPrompt = buildSystemPrompt(baseSystemPrompt);
+      context = buildContext(conversationMessages, systemPrompt, modelLimits);
+    }
 
     // Use actual token count from context manager
     const estimatedTokens = context.totalTokens;

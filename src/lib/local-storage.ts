@@ -547,6 +547,8 @@ export class LocalStorageService {
     conversations: Conversation[];
     conversationFolders: ConversationFolder[];
   }> {
+    // NOTE: RAG data (FolderDocument, FolderChunk, FolderEmbedding, FolderKnowledgeGraph) 
+    // is intentionally excluded from sync - it remains local-only for privacy
     const [messages, folders, conversations, conversationFolders] = await Promise.all([
       this.getPendingChatMessages(),
       this.getPendingFolders(),

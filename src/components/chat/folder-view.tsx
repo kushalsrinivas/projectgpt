@@ -18,6 +18,7 @@ import {
 import { cn } from "@/lib/utils";
 import { api } from "@/trpc/react";
 import { toast } from "sonner";
+import { FolderResourcesPanel } from "../folder/folder-resources-panel";
 
 interface FolderViewProps {
   folderId: number;
@@ -198,17 +199,7 @@ export function FolderView({
           </div>
 
           <TabsContent value="resources" className="flex-1 m-0">
-            <ScrollArea className="h-full">
-              <div className="p-4">
-                <div className="text-center py-8 text-muted-foreground">
-                  <FileText className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                  <p className="text-sm">No resources yet</p>
-                  <p className="text-xs">
-                    Upload files and documents to organize your project context
-                  </p>
-                </div>
-              </div>
-            </ScrollArea>
+            <FolderResourcesPanel folderId={folderId} className="h-full" />
           </TabsContent>
 
           <TabsContent value="conversations" className="flex-1 m-0">
