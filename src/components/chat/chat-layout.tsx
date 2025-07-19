@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { EnhancedSidebar } from "@/components/chat/enhanced-sidebar";
 import { ChatArea } from "@/components/chat/chat-area";
+import { FolderView } from "@/components/chat/folder-view";
 import { ModelSelector } from "@/components/chat/model-selector";
 import { ProjectContextPanel } from "@/components/chat/project-context-panel";
 import { MCPServersPanel } from "@/components/chat/mcp-servers-panel";
@@ -17,6 +18,26 @@ export function ChatLayout() {
   const [selectedConversationId, setSelectedConversationId] = useState<
     string | null
   >(null);
+  const [selectedFolderId, setSelectedFolderId] = useState<number | null>(null);
+
+  const handleNewChat = () => {
+    setSelectedConversationId(null);
+    setSelectedFolderId(null); // Return to normal chat layout
+  };
+
+  const handleFolderSelect = (folderId: number) => {
+    setSelectedFolderId(folderId);
+    setSelectedConversationId(null); // Clear conversation selection when folder is selected
+  };
+
+  const handleNewChatFromFolder = (conversationId?: string) => {
+    setSelectedFolderId(null);
+    if (conversationId) {
+      setSelectedConversationId(conversationId);
+    } else {
+      setSelectedConversationId(null);
+    }
+  };
 
   return (
     <div className="flex h-screen bg-background">
@@ -43,6 +64,9 @@ export function ChatLayout() {
           onClose={() => setSidebarOpen(false)}
           onConversationSelect={setSelectedConversationId}
           selectedConversationId={selectedConversationId}
+          onNewChat={handleNewChat}
+          onFolderSelect={handleFolderSelect}
+          selectedFolderId={selectedFolderId}
         />
       </div>
 
@@ -75,11 +99,19 @@ export function ChatLayout() {
           </div>
         </header>
 
-        {/* Chat area */}
-        <ChatArea
-          selectedModel={selectedModel}
-          selectedConversationId={selectedConversationId}
-        />
+        {/* Chat area or Folder view */}
+        {selectedFolderId ? (
+          <FolderView
+            folderId={selectedFolderId}
+            selectedModel={selectedModel}
+            onNewChatFromFolder={handleNewChatFromFolder}
+          />
+        ) : (
+          <ChatArea
+            selectedModel={selectedModel}
+            selectedConversationId={selectedConversationId}
+          />
+        )}
       </div>
     </div>
   );

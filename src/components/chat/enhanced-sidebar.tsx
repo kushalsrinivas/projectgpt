@@ -46,6 +46,9 @@ interface EnhancedSidebarProps {
   onClose: () => void;
   onConversationSelect: (conversationId: string) => void;
   selectedConversationId: string | null;
+  onNewChat: () => void;
+  onFolderSelect: (folderId: number) => void;
+  selectedFolderId: number | null;
 }
 
 interface ConversationItem {
@@ -72,6 +75,9 @@ export function EnhancedSidebar({
   onClose,
   onConversationSelect,
   selectedConversationId,
+  onNewChat,
+  onFolderSelect,
+  selectedFolderId,
 }: EnhancedSidebarProps) {
   const { data: session } = useSession();
   const [folderManagerOpen, setFolderManagerOpen] = useState(false);
@@ -310,7 +316,7 @@ export function EnhancedSidebar({
             </Badge>
           </div>
 
-          <Button className="w-full" size="sm">
+          <Button className="w-full" size="sm" onClick={onNewChat}>
             <Plus className="h-4 w-4 mr-2" />
             New Chat
           </Button>
@@ -427,33 +433,51 @@ export function EnhancedSidebar({
                       conversationsByFolder.get(folder.id) || [];
                     return (
                       <div key={folder.id} className="space-y-1">
-                        <button
-                          type="button"
-                          className="flex items-center gap-2 p-2 rounded-lg cursor-pointer transition-colors w-full text-left hover:bg-sidebar-accent/50"
-                          onClick={() => toggleFolder(folder.id)}
-                          onDragOver={handleDragOver}
-                          onDrop={() => handleDropOnFolder(folder.id)}
+                        <div
+                          className={cn(
+                            "flex items-center gap-2 p-2 rounded-lg transition-colors",
+                            selectedFolderId === folder.id
+                              ? "bg-primary/10 border border-primary/20"
+                              : "hover:bg-sidebar-accent/50"
+                          )}
                         >
-                          <ChevronRight
-                            className={cn(
-                              "h-3 w-3 transition-transform",
-                              expandedFolders.has(folder.id) && "rotate-90"
-                            )}
-                          />
+                          <button
+                            type="button"
+                            className="p-0 hover:bg-sidebar-accent rounded"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              toggleFolder(folder.id);
+                            }}
+                            onDragOver={handleDragOver}
+                            onDrop={() => handleDropOnFolder(folder.id)}
+                          >
+                            <ChevronRight
+                              className={cn(
+                                "h-3 w-3 transition-transform",
+                                expandedFolders.has(folder.id) && "rotate-90"
+                              )}
+                            />
+                          </button>
 
-                          <div
-                            className="w-3 h-3 rounded-full border border-white/20"
-                            style={{ backgroundColor: folder.color }}
-                          />
+                          <button
+                            type="button"
+                            className="flex items-center gap-2 flex-1 text-left"
+                            onClick={() => onFolderSelect(folder.id)}
+                          >
+                            <div
+                              className="w-3 h-3 rounded-full border border-white/20"
+                              style={{ backgroundColor: folder.color }}
+                            />
 
-                          <span className="text-sm font-medium text-sidebar-foreground flex-1 truncate">
-                            {folder.name}
-                          </span>
+                            <span className="text-sm font-medium text-sidebar-foreground flex-1 truncate">
+                              {folder.name}
+                            </span>
 
-                          <Badge variant="secondary" className="text-xs">
-                            {folderConversations.length}
-                          </Badge>
-                        </button>
+                            <Badge variant="secondary" className="text-xs">
+                              {folderConversations.length}
+                            </Badge>
+                          </button>
+                        </div>
 
                         {/* Folder conversations (when expanded) */}
                         {expandedFolders.has(folder.id) && (
@@ -662,18 +686,23 @@ function CompactConversationItem({
       return;
     }
 
+    // Optimistic update - immediately show the new title
+    setIsRenaming(false);
+    const originalTitle = conversation.title;
+
     try {
+      // Use optimistic update with tRPC mutation
       await renameConversation.mutateAsync({
         conversationId: conversation.id,
         title: newTitle.trim(),
       });
       toast.success("Conversation renamed successfully");
+      // Refetch to ensure consistency
       onRefetch();
-      setIsRenaming(false);
     } catch (error) {
+      // Revert on error
+      setNewTitle(originalTitle);
       toast.error("Failed to rename conversation");
-      setNewTitle(conversation.title);
-      setIsRenaming(false);
     }
   };
 
