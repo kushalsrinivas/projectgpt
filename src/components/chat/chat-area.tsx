@@ -273,7 +273,7 @@ export function ChatArea({
   }
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full overflow-hidden">
       {/* Sign-in modal for guests */}
       <SignInModal
         open={showSignInModal}
@@ -324,163 +324,173 @@ export function ChatArea({
         </Dialog>
       )}
 
-      <ScrollArea ref={scrollAreaRef} className="flex-1 p-4">
-        <div className="space-y-4 max-w-4xl mx-auto">
-          {messages.length === 0 && (
-            <div className="flex flex-col items-center justify-center h-64 text-center">
-              <div className="p-4 rounded-lg bg-muted/50 max-w-md">
-                <h3 className="font-semibold mb-2">Welcome to ProjectGPT!</h3>
-                <p className="text-sm text-muted-foreground">
-                  I'm your AI assistant. I can help you with coding, writing,
-                  analysis, and more. What would you like to work on today?
-                </p>
-                {!session && isClient && (
-                  <p className="text-xs text-muted-foreground mt-2">
-                    You have {remainingMessages} free messages remaining. Sign
-                    in for unlimited access.
-                  </p>
-                )}
-              </div>
-            </div>
-          )}
-
-          {messages.map((message) => (
-            <div
-              key={message.id}
-              className={cn(
-                "flex gap-3",
-                message.role === "user" ? "justify-end" : "justify-start"
-              )}
-            >
-              {message.role === "assistant" && (
-                <Avatar className="h-8 w-8 mt-1">
-                  <AvatarFallback className="bg-primary text-primary-foreground">
-                    AI
-                  </AvatarFallback>
-                </Avatar>
-              )}
-
-              <div
-                className={cn(
-                  "max-w-[80%] rounded-lg p-4",
-                  message.role === "user"
-                    ? "bg-primary text-primary-foreground ml-12"
-                    : "bg-muted"
-                )}
-              >
-                {message.role === "assistant" && message.model && (
-                  <div className="flex items-center gap-2 mb-2">
-                    <Badge variant="outline" className="text-xs">
-                      {message.model}
-                    </Badge>
-                    <span className="text-xs text-muted-foreground">
-                      {message.timestamp.toLocaleTimeString()}
-                    </span>
+      {/* Messages area - scrollable */}
+      <div className="flex-1 overflow-hidden">
+        <ScrollArea ref={scrollAreaRef} className="h-full">
+          <div className="p-4">
+            <div className="space-y-4 max-w-4xl mx-auto">
+              {messages.length === 0 && (
+                <div className="flex flex-col items-center justify-center h-64 text-center">
+                  <div className="p-4 rounded-lg bg-muted/50 max-w-md">
+                    <h3 className="font-semibold mb-2">
+                      Welcome to ProjectGPT!
+                    </h3>
+                    <p className="text-sm text-muted-foreground">
+                      I'm your AI assistant. I can help you with coding,
+                      writing, analysis, and more. What would you like to work
+                      on today?
+                    </p>
+                    {!session && isClient && (
+                      <p className="text-xs text-muted-foreground mt-2">
+                        You have {remainingMessages} free messages remaining.
+                        Sign in for unlimited access.
+                      </p>
+                    )}
                   </div>
-                )}
-
-                <div className="prose prose-sm max-w-none">
-                  <pre className="whitespace-pre-wrap font-sans">
-                    {message.content}
-                  </pre>
                 </div>
+              )}
 
-                {message.role === "assistant" && (
-                  <div className="flex items-center gap-2 mt-3 pt-2 border-t border-border/50">
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={() => copyMessage(message.content)}
-                    >
-                      <Copy className="h-3 w-3" />
-                    </Button>
-                    <Button size="sm" variant="ghost">
-                      <ThumbsUp className="h-3 w-3" />
-                    </Button>
-                    <Button size="sm" variant="ghost">
-                      <ThumbsDown className="h-3 w-3" />
-                    </Button>
-                    <Button size="sm" variant="ghost">
-                      <RefreshCw className="h-3 w-3" />
-                    </Button>
+              {messages.map((message) => (
+                <div
+                  key={message.id}
+                  className={cn(
+                    "flex gap-3",
+                    message.role === "user" ? "justify-end" : "justify-start"
+                  )}
+                >
+                  {message.role === "assistant" && (
+                    <Avatar className="h-8 w-8 mt-1">
+                      <AvatarFallback className="bg-primary text-primary-foreground">
+                        AI
+                      </AvatarFallback>
+                    </Avatar>
+                  )}
+
+                  <div
+                    className={cn(
+                      "max-w-[80%] rounded-lg p-4",
+                      message.role === "user"
+                        ? "bg-primary text-primary-foreground ml-12"
+                        : "bg-muted"
+                    )}
+                  >
+                    {message.role === "assistant" && message.model && (
+                      <div className="flex items-center gap-2 mb-2">
+                        <Badge variant="outline" className="text-xs">
+                          {message.model}
+                        </Badge>
+                        <span className="text-xs text-muted-foreground">
+                          {message.timestamp.toLocaleTimeString()}
+                        </span>
+                      </div>
+                    )}
+
+                    <div className="prose prose-sm max-w-none">
+                      <pre className="whitespace-pre-wrap font-sans">
+                        {message.content}
+                      </pre>
+                    </div>
+
+                    {message.role === "assistant" && (
+                      <div className="flex items-center gap-2 mt-3 pt-2 border-t border-border/50">
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => copyMessage(message.content)}
+                        >
+                          <Copy className="h-3 w-3" />
+                        </Button>
+                        <Button size="sm" variant="ghost">
+                          <ThumbsUp className="h-3 w-3" />
+                        </Button>
+                        <Button size="sm" variant="ghost">
+                          <ThumbsDown className="h-3 w-3" />
+                        </Button>
+                        <Button size="sm" variant="ghost">
+                          <RefreshCw className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    )}
                   </div>
-                )}
-              </div>
 
-              {message.role === "user" && (
-                <Avatar className="h-8 w-8 mt-1">
-                  <AvatarFallback>
-                    {session ? session.user?.name?.charAt(0) || "U" : "G"}
-                  </AvatarFallback>
-                </Avatar>
+                  {message.role === "user" && (
+                    <Avatar className="h-8 w-8 mt-1">
+                      <AvatarFallback>
+                        {session ? session.user?.name?.charAt(0) || "U" : "G"}
+                      </AvatarFallback>
+                    </Avatar>
+                  )}
+                </div>
+              ))}
+
+              {isLoading && (
+                <div className="flex gap-3">
+                  <Avatar className="h-8 w-8 mt-1">
+                    <AvatarFallback className="bg-primary text-primary-foreground">
+                      AI
+                    </AvatarFallback>
+                  </Avatar>
+                  <div className="bg-muted rounded-lg p-4">
+                    <div className="flex items-center gap-2">
+                      <div className="animate-spin">
+                        <RefreshCw className="h-4 w-4" />
+                      </div>
+                      <span className="text-sm text-muted-foreground">
+                        {selectedModel} is thinking...
+                      </span>
+                    </div>
+                  </div>
+                </div>
               )}
             </div>
-          ))}
+          </div>
+        </ScrollArea>
+      </div>
 
-          {isLoading && (
-            <div className="flex gap-3">
-              <Avatar className="h-8 w-8 mt-1">
-                <AvatarFallback className="bg-primary text-primary-foreground">
-                  AI
-                </AvatarFallback>
-              </Avatar>
-              <div className="bg-muted rounded-lg p-4">
-                <div className="flex items-center gap-2">
-                  <div className="animate-spin">
-                    <RefreshCw className="h-4 w-4" />
-                  </div>
-                  <span className="text-sm text-muted-foreground">
-                    {selectedModel} is thinking...
+      {/* Input area - fixed at bottom */}
+      <div className="shrink-0 border-t bg-background">
+        <div className="p-4">
+          <div className="max-w-4xl mx-auto">
+            <div className="flex items-end gap-3">
+              <div className="flex-1">
+                <Textarea
+                  ref={textareaRef}
+                  value={input}
+                  onChange={(e) => setInput(e.target.value)}
+                  onKeyDown={handleKeyDown}
+                  placeholder="Type your message... (Press Enter to send, Shift+Enter for new line)"
+                  className="min-h-[60px] max-h-[200px] resize-none"
+                  disabled={isLoading}
+                />
+              </div>
+              <Button
+                onClick={handleSend}
+                disabled={!input.trim() || isLoading}
+                size="lg"
+              >
+                {isStreaming ? (
+                  <RefreshCw className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Send className="h-4 w-4" />
+                )}
+              </Button>
+            </div>
+
+            <div className="flex items-center justify-between mt-2 text-xs text-muted-foreground">
+              <span>Using {selectedModel}</span>
+              <div className="flex items-center gap-4">
+                <span>Press Enter to send • Shift+Enter for new line</span>
+                <div className="flex items-center gap-1">
+                  <Zap className="h-3 w-3 text-yellow-500" />
+                  <span>
+                    {session
+                      ? quota?.tier === "free"
+                        ? `${quota.remaining.requests} requests remaining`
+                        : "Unlimited"
+                      : isClient &&
+                        `${remainingMessages} free messages remaining`}
                   </span>
                 </div>
-              </div>
-            </div>
-          )}
-        </div>
-      </ScrollArea>
-
-      {/* Input area */}
-      <div className="border-t p-4">
-        <div className="max-w-4xl mx-auto">
-          <div className="flex items-end gap-3">
-            <div className="flex-1">
-              <Textarea
-                ref={textareaRef}
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                onKeyDown={handleKeyDown}
-                placeholder="Type your message... (Press Enter to send, Shift+Enter for new line)"
-                className="min-h-[60px] max-h-[200px] resize-none"
-                disabled={isLoading}
-              />
-            </div>
-            <Button
-              onClick={handleSend}
-              disabled={!input.trim() || isLoading}
-              size="lg"
-            >
-              {isStreaming ? (
-                <RefreshCw className="h-4 w-4 animate-spin" />
-              ) : (
-                <Send className="h-4 w-4" />
-              )}
-            </Button>
-          </div>
-
-          <div className="flex items-center justify-between mt-2 text-xs text-muted-foreground">
-            <span>Using {selectedModel}</span>
-            <div className="flex items-center gap-4">
-              <span>Press Enter to send • Shift+Enter for new line</span>
-              <div className="flex items-center gap-1">
-                <Zap className="h-3 w-3 text-yellow-500" />
-                <span>
-                  {session
-                    ? quota?.tier === "free"
-                      ? `${quota.remaining.requests} requests remaining`
-                      : "Unlimited"
-                    : isClient &&
-                      `${remainingMessages} free messages remaining`}
-                </span>
               </div>
             </div>
           </div>
